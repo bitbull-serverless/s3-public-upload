@@ -1,0 +1,131 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Description: A public uploader manager API to integrate with checkout/personalization flow.
+
+Parameters:
+  GoogleReCaptchaSecret:
+    Type: String
+    Description: "The Google reCAPTCHA secret"
+    NoEcho: true
+  UploadUrlExpiration:
+    Type: Number
+    Description: "Number of seconds until the pre-signed URL expires"
+    Default: 3600
+  UploadedObjectsPrefix:
+    Type: String
+    Description: "S3 prefix for uploaded files into the S3 bucket"
+    Default: "tmp/"
+  UploadedObjectsExpiration:
+    Type: Number
+    Description: "S3 bucket uploaded objects expiration in days"
+    Default: 1
+  AllowedOrigins:
+    Type: String
+    Description: "The AllowedOrigins CORS header"
+    Default: "*"
+  DefaultFileContentType:
+    Type: String
+    Description: "The default content type per uploaded files"
+    Default: "application/pdf"
+  DefaultFileExtension:
+    Type: String
+    Description: "The default extension for uploaded files"
+    Default: ".pdf"
+
+Globals:
+  Function:
+    Timeout: 6
+    Runtime: nodejs14.x
+    CodeUri: ./src
+    Tags:
+      ServiceName: S3 Public Upload
+      ServiceScope: API
+
+Resources:
+
+  GoogleReCaptchaSecretParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Name: !Sub "${AWS::StackName}-recaptcha"
+      Value: !Ref GoogleReCaptchaSecret
+
+  ApiGatewayApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: api
+      Cors:
+        AllowMethods: "'POST'"
+        AllowHeaders: "'Content-Type'"
+        AllowOrigin: !Sub "'${AllowedOrigins}'"
+      GatewayResponses:
+        DEFAULT_4xx:
+          StatusCode: 404
+          ResponseTemplates: 
+            "text/plain": "Not Found"
+        DEFAULT_5xx:
+          StatusCode: 500
+          ResponseTemplates:
+            "text/plain": "Internal Server Error"
+
+  UploadBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref AWS::StackName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - 'Content-Type'
+            AllowedMethods:
+              - 'PUT'
+            AllowedOrigins:
+              - !Sub "${AllowedOrigins}"
+      LifecycleConfiguration:
+        Rules:
+          - Id: delete-tmp-files
+            ExpirationInDays: !Ref UploadedObjectsExpiration
+            Status: Enabled
+            Prefix: !Ref UploadedObjectsPrefix
+
+  
+  UploadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Ref AWS::StackName
+      Handler: api/upload.handler
+      Environment:
+        Variables:
+          RECAPTCHA_SECRET_PARAMETER_NAME: !Ref GoogleReCaptchaSecretParameter
+          BUCKET_NAME: !Ref UploadBucket
+          OBJECT_KEY_PREFIX: !Ref UploadedObjectsPrefix
+          UPLOAD_URL_EXPIRATION_SECONDS: !Ref UploadUrlExpiration
+          ALLOWED_ORIGINS: !Ref AllowedOrigins
+          DEFAULT_FILE_CONTENT_TYPE: !Ref DefaultFileContentType
+          DEFAULT_FILE_EXTENSION: !Ref DefaultFileExtension
+      Policies:
+        - SSMParameterReadPolicy:
+            ParameterName: !Ref GoogleReCaptchaSecretParameter
+        - S3WritePolicy:
+            BucketName: !Ref UploadBucket
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGatewayApi
+            Method: POST
+            Path: /upload
+
+Outputs:
+  UploadBucket:
+    Description: "The name of S3 bucket where files will be uploaded to"
+    Value: !Ref UploadBucket
+  ApiUploadEndpoint:
+    Description: "The upload API endpoint URL"
+    Value: !Sub "https://${ApiGatewayApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/api/upload"
