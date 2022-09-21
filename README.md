@@ -79,7 +79,7 @@ request:
 ```js
 {
   token: "xxxxxxxxxxxxx", // the token generated on frontend by reCAPTCHA lib
-  type: "image/jpeg", // the object mimetype to allowed for upload (leave empty to use the value)
+  type: "image/jpeg", // the object mimetype to allowed for upload (leave empty to use the default value)
   ext: ".jpg" // the file extension (leave empty to use the default value)
 }
 ```
@@ -108,11 +108,11 @@ Edit the file `frontend/index.html` before using locally or serving it remotely:
 
 Add the Google reCAPTCHA site key (not the secret one) to API lib include script:
 ```html
-<script src="https://www.google.com/recaptcha/api.js?render=<insert the key here>"></script>
+<script src="https://www.google.com/recaptcha/api.js?render=<insert the reCAPTCHA key here>"></script>
 ```
 and at the top of main script:
 ```js
-const RECAPTCHA_SITE_KEY = '<insert the key here>'
+const RECAPTCHA_SITE_KEY = '<insert the reCAPTCHA key here>'
 ```
 
 Change the `API_ENDPOINT` variable adding the Stack output `ApiUploadEndpoint` value:
