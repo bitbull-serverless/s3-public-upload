@@ -44,14 +44,13 @@
     const RECAPTCHA_SITE_KEY = '<insert the key here>'
     const API_ENDPOINT = '<insert the API endpoint here>'
 
-    new Vue({
-      el: "#app",
-      data: {
+    Vue.createApp({
+      data: () => ({
         image: '',
         ready: false,
         progress: 0,
         loading: false
-      },
+      }),
       mounted() {
         grecaptcha.ready(() => {
           this.ready = true
@@ -154,7 +153,7 @@
           }
         }
       }
-    })
+    }).mount("#app")
   </script>
   <style type="text/css">
     body {
